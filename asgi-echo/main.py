@@ -4,6 +4,7 @@ import asyncio
 import mcp
 from mcp.server.models import InitializationOptions
 from mcp.server.fastmcp import FastMCP
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 
 from middleware import serve
 
@@ -15,7 +16,7 @@ class MCPServer:
     def __init__(self):
         print("MCPServer init")
         # Create FastMCP instance with all our tools, resources, and prompts
-        self.mcp = FastMCP("super cool mcp server")
+        self.mcp = FastMCP("super cool mcp server", stateless_http=True)
         
         # Define tools using the decorator
         @self.mcp.tool()
@@ -46,14 +47,19 @@ class MCPServer:
             ]
         
         # Get the streamable HTTP app from FastMCP
-        # This creates a Starlette app with /mcp mount point
-        self._starlette_app = self.mcp.streamable_http_app()
+        # This handles all the complexity including the session manager lifecycle
+        self._app = self.mcp.streamable_http_app()
+        self._app_state = None  # Track lifespan state
 
     async def handle_mcp_requests(self, scope, receive, send):
         """Forward requests to the FastMCP streamable HTTP app"""
-        # The streamable_http_app() returns a Starlette app that expects
-        # to handle the full ASGI interface
-        await self._starlette_app(scope, receive, send)
+        # Handle lifespan events for the Starlette app
+        if scope['type'] == 'lifespan':
+            # The Starlette app needs lifespan events to start the session manager
+            await self._app(scope, receive, send)
+        else:
+            # Forward HTTP requests
+            await self._app(scope, receive, send)
     
 # Function
 class Function:
@@ -62,18 +68,45 @@ class Function:
         initialize MCP server
         """
         self.mcp_server = MCPServer()
+        self._started = False
 
     async def handle(self, scope, receive, send): # pyright: ignore
         """ Handle all HTTP requests to this Function other than readiness
         and liveness probes."""
 
+        # Initialize the MCP server on first request
+        if not self._started:
+            # Send lifespan startup event to the MCP app
+            lifespan_scope = {'type': 'lifespan', 'asgi': {'version': '3.0'}}
+            startup_sent = False
+            
+            async def lifespan_receive():
+                nonlocal startup_sent
+                if not startup_sent:
+                    startup_sent = True
+                    return {'type': 'lifespan.startup'}
+                # Wait forever for shutdown
+                await asyncio.Event().wait()
+            
+            async def lifespan_send(message):
+                if message['type'] == 'lifespan.startup.complete':
+                    self._started = True
+                elif message['type'] == 'lifespan.startup.failed':
+                    logging.error(f"MCP startup failed: {message}")
+            
+            # Start the lifespan in background
+            asyncio.create_task(self.mcp_server.handle_mcp_requests(
+                lifespan_scope, lifespan_receive, lifespan_send
+            ))
+            
+            # Wait a bit for startup to complete
+            await asyncio.sleep(0.1)
+
         logging.info(f"OK: Request Received for path: {scope['path']}")
         
         # Route MCP requests to the MCP server
-        # The FastMCP streamable_http_app has its own routing,
-        # so we pass all /mcp* requests to it
         if scope['path'].startswith('/mcp'):
-            print(f"scope starts with /mcp, path: {scope['path']}")
+            print(f"Handling MCP request for path: {scope['path']}")
             await self.mcp_server.handle_mcp_requests(scope, receive, send)
             return
 
