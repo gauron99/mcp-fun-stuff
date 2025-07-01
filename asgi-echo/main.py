@@ -7,29 +7,53 @@ from mcp.server.fastmcp import FastMCP
 
 from middleware import serve
 
-# from function
-def handler():
+# new function
+def new():
     return Function()
 
 class MCPServer:
-    mcpG = FastMCP("global mcp supertooler")
-
-    @mcpG.tool()
-    def hello_tool(name: str) -> str:
-        return f"Hey there {name}!"
-
     def __init__(self):
         print("MCPServer init")
+        # Create FastMCP instance with all our tools, resources, and prompts
         self.mcp = FastMCP("super cool mcp server")
-        self.mcp.settings.mount_path = "/mcp"
-        self.mcpG.settings.mount_path = "/mcp"
+        
+        # Define tools using the decorator
+        @self.mcp.tool()
+        def hello_tool(name: str) -> str:
+            """Say hello to someone"""
+            return f"Hey there {name}!"
+        
+        @self.mcp.tool()
+        def add_numbers(a: int, b: int) -> int:
+            """Add two numbers together"""
+            return a + b
+        
+        # Define a resource
+        @self.mcp.resource("echo://{message}")
+        def echo_resource(message: str) -> str:
+            """Echo the message as a resource"""
+            return f"Echo: {message}"
+        
+        # Define a prompt
+        @self.mcp.prompt()
+        def greeting_prompt(name: str = "World"):
+            """Generate a greeting prompt"""
+            return [
+                {
+                    "role": "user",
+                    "content": f"Please write a friendly greeting for {name}"
+                }
+            ]
+        
+        # Get the streamable HTTP app from FastMCP
+        # This creates a Starlette app with /mcp mount point
+        self._starlette_app = self.mcp.streamable_http_app()
 
-    async def handle_mcp_requests(self,scope,receive,send) -> str:
-        print("hello in handle_mcp_requests")
-        rec = await receive()
-        print(rec)
-        #self.mcp.call_tool(name)
-        return "hello"
+    async def handle_mcp_requests(self, scope, receive, send):
+        """Forward requests to the FastMCP streamable HTTP app"""
+        # The streamable_http_app() returns a Starlette app that expects
+        # to handle the full ASGI interface
+        await self._starlette_app(scope, receive, send)
     
 # Function
 class Function:
@@ -37,19 +61,21 @@ class Function:
         """
         initialize MCP server
         """
-
         self.mcp_server = MCPServer()
-        #self.mcp_task = None
 
     async def handle(self, scope, receive, send): # pyright: ignore
         """ Handle all HTTP requests to this Function other than readiness
         and liveness probes."""
 
-        logging.info("OK: Request Received")
+        logging.info(f"OK: Request Received for path: {scope['path']}")
+        
+        # Route MCP requests to the MCP server
+        # The FastMCP streamable_http_app has its own routing,
+        # so we pass all /mcp* requests to it
         if scope['path'].startswith('/mcp'):
-            print("scope starts with /mcp")
-            r = await self.mcp_server.handle_mcp_requests(scope,receive,send)
-            pass
+            print(f"scope starts with /mcp, path: {scope['path']}")
+            await self.mcp_server.handle_mcp_requests(scope, receive, send)
+            return
 
         # echo the request to the calling client
         await send({
@@ -89,4 +115,4 @@ class Function:
 
 if __name__ == "__main__":
     print("Start")
-    serve(handler)
+    serve(new)
