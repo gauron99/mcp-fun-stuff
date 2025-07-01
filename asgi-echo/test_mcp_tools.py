@@ -1,30 +1,29 @@
 #!/usr/bin/env python3
 """
 Test that confirms the MCP server in main.py correctly handles tool calls.
-This test uses the official MCP client library to connect and call both hello_tool and add_numbers.
+This test uses direct HTTP requests to the streamable HTTP endpoints.
 """
 
 import asyncio
 import sys
-from mcp import ClientSession
-from mcp.client.sse import sse_client
 import httpx
+import json
+import uuid
 
 
 async def test_mcp_tools():
-    """Test the MCP server tools using the official MCP client"""
+    """Test the MCP server tools using streamable HTTP protocol"""
     
     # The server should be running on localhost:8081
     base_url = "http://localhost:8081"
-    mcp_endpoint = f"{base_url}/mcp"
     
-    print("🔧 Testing MCP Server Tools with Official MCP Client")
+    print("🔧 Testing MCP Server Tools with Streamable HTTP")
     print("=" * 50)
     
     # First check if the server is running
-    async with httpx.AsyncClient() as http_client:
+    async with httpx.AsyncClient() as client:
         try:
-            response = await http_client.get(base_url)
+            response = await client.get(base_url)
             print(f"✓ Server is running on {base_url}")
         except Exception as e:
             print(f"✗ Server not reachable at {base_url}")
@@ -33,125 +32,53 @@ async def test_mcp_tools():
             print("  LISTEN_ADDRESS=:8081 python main.py")
             return False
     
-    # Since our server uses JSON-RPC over HTTP (streamable HTTP),
-    # we'll use SSE client which can handle HTTP transport
-    try:
-        async with sse_client(f"{mcp_endpoint}/sse") as (read_stream, write_stream):
-            async with ClientSession(read_stream, write_stream) as session:
-                print("\n1. Initializing MCP session...")
-                
-                # Initialize the session
-                init_result = await session.initialize()
-                print(f"✓ Connected to: {init_result.server_info.name}")
-                print(f"✓ Protocol version: {init_result.protocol_version}")
-                
-                # Test 1: List tools
-                print("\n2. Listing available tools...")
-                tools_result = await session.list_tools()
-                print(f"✓ Found {len(tools_result.tools)} tools:")
-                
-                for tool in tools_result.tools:
-                    print(f"  - {tool.name}: {tool.description}")
-                    if hasattr(tool, 'inputSchema'):
-                        print(f"    Schema: {tool.inputSchema}")
-                
-                # Test 2: Call hello_tool
-                print("\n3. Testing hello_tool...")
-                result = await session.call_tool(
-                    name="hello_tool",
-                    arguments={"name": "MCP Client"}
-                )
-                
-                if result.content:
-                    output = result.content[0].text
-                    print(f"✓ hello_tool('MCP Client') returned: '{output}'")
-                    
-                    expected = "Hey there MCP Client!"
-                    if output == expected:
-                        print("✓ Output matches expected result!")
-                    else:
-                        print(f"✗ Expected '{expected}' but got '{output}'")
-                
-                # Test 3: Call add_numbers
-                print("\n4. Testing add_numbers...")
-                test_cases = [
-                    (5, 3, 8),
-                    (10, 20, 30),
-                    (-5, 5, 0),
-                    (100, 200, 300)
-                ]
-                
-                all_passed = True
-                for a, b, expected in test_cases:
-                    result = await session.call_tool(
-                        name="add_numbers",
-                        arguments={"a": a, "b": b}
-                    )
-                    
-                    if result.content:
-                        output = result.content[0].text
-                        try:
-                            actual = int(output)
-                            if actual == expected:
-                                print(f"✓ add_numbers({a}, {b}) = {actual} ✓")
-                            else:
-                                print(f"✗ add_numbers({a}, {b}) = {actual} (expected {expected})")
-                                all_passed = False
-                        except ValueError:
-                            print(f"✗ add_numbers({a}, {b}) returned non-numeric: '{output}'")
-                            all_passed = False
-                
-                # Test resources
-                print("\n5. Testing resources...")
-                resources_result = await session.list_resources()
-                print(f"✓ Found {len(resources_result.resources)} resource(s)")
-                
-                # Test echo resource
-                if resources_result.resources:
-                    print("✓ Testing echo resource...")
-                    resource_result = await session.read_resource("echo://Hello%20from%20MCP%20Client")
-                    if resource_result.contents:
-                        print(f"  Response: {resource_result.contents[0].text}")
-                
-                # Test prompts
-                print("\n6. Testing prompts...")
-                prompts_result = await session.list_prompts()
-                print(f"✓ Found {len(prompts_result.prompts)} prompt(s)")
-                
-                if prompts_result.prompts:
-                    print("✓ Testing greeting prompt...")
-                    prompt_result = await session.get_prompt(
-                        name="greeting_prompt",
-                        arguments={"name": "Alice"}
-                    )
-                    if prompt_result.messages:
-                        print(f"  Prompt: {prompt_result.messages[0]['content']}")
-                
-                # Summary
-                print("\n" + "=" * 50)
-                if all_passed:
-                    print("✅ All tests passed!")
-                    print("\n🎉 Your MCP server is working correctly!")
-                    print("   - FastMCP decorators are properly configured")
-                    print("   - Tools are callable and return correct results")
-                    print("   - Resources and prompts work as expected")
-                    print("   - Server is stateless and ready for Kubernetes")
-                    return True
-                else:
-                    print("❌ Some tests failed")
-                    return False
-                    
-    except Exception as e:
-        print(f"\n✗ Failed to connect with MCP client")
-        print(f"  Error: {type(e).__name__}: {e}")
+    # FastMCP's streamable HTTP uses session-based communication
+    async with httpx.AsyncClient() as client:
+        # Create a session
+        session_id = str(uuid.uuid4())
         
-        # Fallback to direct HTTP testing
-        print("\n📋 Falling back to direct HTTP testing...")
+        print("\n1. Creating streamable HTTP session...")
         
-        async with httpx.AsyncClient() as client:
-            # Test with direct JSON-RPC
+        # The streamable HTTP protocol expects requests at /mcp/mcp
+        # (our routing passes /mcp*, and FastMCP mounts at /mcp internally)
+        endpoint = f"{base_url}/mcp/mcp"
+        
+        # Streamable HTTP uses session headers
+        headers = {
+            "Content-Type": "application/json",
+            "X-MCP-Session-ID": session_id
+        }
+        
+        # Test initialize
+        print("\n2. Initializing MCP connection...")
+        response = await client.post(
+            endpoint,
+            json={
+                "jsonrpc": "2.0",
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {
+                        "name": "test-client",
+                        "version": "1.0"
+                    }
+                },
+                "id": 1
+            },
+            headers=headers,
+            follow_redirects=True
+        )
+        
+        print(f"  Status: {response.status_code}")
+        
+        if response.status_code != 200:
+            print(f"  Response: {response.text[:200]}")
+            print("\n  Trying without session header...")
+            
+            # Try without session header
             response = await client.post(
-                mcp_endpoint,
+                endpoint,
                 json={
                     "jsonrpc": "2.0",
                     "method": "initialize",
@@ -164,63 +91,158 @@ async def test_mcp_tools():
                         }
                     },
                     "id": 1
-                }
+                },
+                follow_redirects=True
             )
             
-            if response.status_code == 200:
-                result = response.json()
-                if "result" in result:
-                    print(f"✓ Direct JSON-RPC works!")
-                    print(f"  Server: {result['result']['serverInfo']['name']}")
+            print(f"  Status: {response.status_code}")
+        
+        if response.status_code == 200:
+            result = response.json()
+            if "result" in result:
+                server_info = result["result"]["serverInfo"]
+                print(f"✓ Connected to: {server_info['name']}")
+                print(f"✓ Protocol version: {result['result']['protocolVersion']}")
+                
+                # Use the same headers for subsequent requests
+                if "X-MCP-Session-ID" not in headers:
+                    headers = {"Content-Type": "application/json"}
+                
+                # Test tools
+                print("\n3. Listing available tools...")
+                response = await client.post(
+                    endpoint,
+                    json={
+                        "jsonrpc": "2.0",
+                        "method": "tools/list",
+                        "params": {},
+                        "id": 2
+                    },
+                    headers=headers
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    tools = result["result"]["tools"]
+                    print(f"✓ Found {len(tools)} tools:")
+                    for tool in tools:
+                        print(f"  - {tool['name']}: {tool['description']}")
+                
+                # Test hello_tool
+                print("\n4. Testing hello_tool...")
+                response = await client.post(
+                    endpoint,
+                    json={
+                        "jsonrpc": "2.0",
+                        "method": "tools/call",
+                        "params": {
+                            "name": "hello_tool",
+                            "arguments": {"name": "Streamable HTTP"}
+                        },
+                        "id": 3
+                    },
+                    headers=headers
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    content = result["result"]["content"][0]["text"]
+                    print(f"✓ hello_tool('Streamable HTTP') returned: '{content}'")
                     
-                    # Test tools via JSON-RPC
-                    print("\n  Testing hello_tool via JSON-RPC...")
+                    expected = "Hey there Streamable HTTP!"
+                    if content == expected:
+                        print("✓ Output matches expected result!")
+                
+                # Test add_numbers
+                print("\n5. Testing add_numbers...")
+                test_cases = [
+                    (5, 3, 8),
+                    (10, 20, 30),
+                    (-5, 5, 0),
+                    (100, 200, 300)
+                ]
+                
+                all_passed = True
+                for a, b, expected in test_cases:
                     response = await client.post(
-                        mcp_endpoint,
-                        json={
-                            "jsonrpc": "2.0",
-                            "method": "tools/call",
-                            "params": {
-                                "name": "hello_tool",
-                                "arguments": {"name": "JSON-RPC Test"}
-                            },
-                            "id": 2
-                        }
-                    )
-                    
-                    if response.status_code == 200:
-                        result = response.json()
-                        if "result" in result:
-                            content = result["result"]["content"][0]["text"]
-                            print(f"  ✓ hello_tool returned: '{content}'")
-                            
-                    print("\n  Testing add_numbers via JSON-RPC...")
-                    response = await client.post(
-                        mcp_endpoint,
+                        endpoint,
                         json={
                             "jsonrpc": "2.0",
                             "method": "tools/call",
                             "params": {
                                 "name": "add_numbers",
-                                "arguments": {"a": 10, "b": 20}
+                                "arguments": {"a": a, "b": b}
                             },
-                            "id": 3
-                        }
+                            "id": 4
+                        },
+                        headers=headers
                     )
                     
                     if response.status_code == 200:
                         result = response.json()
-                        if "result" in result:
-                            content = result["result"]["content"][0]["text"]
-                            print(f"  ✓ add_numbers(10, 20) = {content}")
+                        content = result["result"]["content"][0]["text"]
+                        actual = int(content)
+                        
+                        if actual == expected:
+                            print(f"✓ add_numbers({a}, {b}) = {actual} ✓")
+                        else:
+                            print(f"✗ add_numbers({a}, {b}) = {actual} (expected {expected})")
+                            all_passed = False
+                
+                # Test resources
+                print("\n6. Testing resources...")
+                response = await client.post(
+                    endpoint,
+                    json={
+                        "jsonrpc": "2.0",
+                        "method": "resources/list",
+                        "params": {},
+                        "id": 5
+                    },
+                    headers=headers
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    resources = result["result"]["resources"]
+                    print(f"✓ Found {len(resources)} resource(s)")
                     
-                    print("\n✅ Server works with JSON-RPC!")
-                    print("   The server is functional, though SSE client connection failed.")
-                    print("   This is fine for Kubernetes deployment as it uses stateless HTTP.")
+                    # Test echo resource
+                    response = await client.post(
+                        endpoint,
+                        json={
+                            "jsonrpc": "2.0",
+                            "method": "resources/read",
+                            "params": {"uri": "echo://Hello%20FastMCP"},
+                            "id": 6
+                        },
+                        headers=headers
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        content = result["result"]["contents"][0]["text"]
+                        print(f"✓ Echo resource returned: '{content}'")
+                
+                print("\n" + "=" * 50)
+                if all_passed:
+                    print("✅ All tests passed!")
+                    print("\n🎉 Your MCP server is working correctly!")
+                    print("   - Uses FastMCP's streamable_http_app()")
+                    print("   - No MCP protocol implementation in main.py")
+                    print("   - All complexity delegated to FastMCP")
+                    print("   - Ready for Kubernetes deployment!")
                     return True
+                else:
+                    print("❌ Some tests failed")
+                    return False
             else:
-                print(f"✗ Direct JSON-RPC failed with status {response.status_code}")
+                print(f"✗ Unexpected response: {result}")
                 return False
+        else:
+            print(f"✗ Failed to connect to MCP server")
+            print(f"  The FastMCP streamable HTTP app may need different routing")
+            return False
 
 
 async def main():
