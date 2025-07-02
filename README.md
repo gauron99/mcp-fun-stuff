@@ -7,9 +7,10 @@ Implementations of MCP and integrating MCP into Knative Functions
 - using [python-sdk](https://github.com/modelcontextprotocol/python-sdk)
 
 ## dir explanations
-- local - basic implementation of MCP server/client (stdio comms)
-- http - basic impl of MCP server/client (streamable-http comms)
-- asgi-local - local integration of MCP into Function
-    - python middleware is simply copy&pasted into `middleware.py`
-- asgi - integration of MCP into Function
-    - imports actual func python middleware
+- mcp-only - contains mcp server/client (no func)
+    - contains streamable-http and stdio style communication for MCP
+- asgi - contains Function-like code without it being run like a Function
+    - local - basic implementation of MCP server/client
+    - standard - uses func-python middleware
+    - dev - contains bunch of testing/debug code on top
+- functions - contains actuall depoyable MCP server as a Function
