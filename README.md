@@ -14,3 +14,13 @@ Implementations of MCP and integrating MCP into Knative Functions
     - standard - uses func-python middleware
     - dev - contains bunch of testing/debug code on top
 - functions - contains actuall depoyable MCP server as a Function
+
+## steps
+- install python venv
+- pip install requirements.txt
+- choose a function/project
+- either:
+    - run `python main.py` or similar in non-functions dir
+    - run `func deploy` or `func run` using host builder
+    - port-forward your function
+        - eg: `kubectl port-forward <pod name in cluster> 8080:8080
