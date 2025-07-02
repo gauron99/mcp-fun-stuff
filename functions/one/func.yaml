@@ -1,0 +1,13 @@
+# $schema: https://raw.githubusercontent.com/knative/func/refs/tags/v0.36.0/schema/func_yaml-schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/knative/func/refs/tags/v0.36.0/schema/func_yaml-schema.json
+specVersion: 0.36.0
+name: one
+runtime: python
+registry: quay.io/dfridric
+namespace: default
+created: 2025-07-02T12:00:16.051087121+02:00
+build:
+  builder: host
+deploy:
+  namespace: default
+  image: quay.io/dfridric/one@sha256:1b6a8e22367e8cf5bb6f85f9d2b8674d5bcfca0db4a7302f0e4bf0e29a657523
