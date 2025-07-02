@@ -45,7 +45,7 @@ class MCPServer:
     def _register_prompts(self):
         """Register MCP prompts."""
         @self.mcp.prompt()
-        def greeting_prompt(name: str = "World"):
+        def greeting_prompt(name: str = "Big Dave"):
             """Generate a greeting prompt."""
             return [
                 {

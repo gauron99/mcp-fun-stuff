@@ -13,7 +13,7 @@ async def test_mcp_server():
     
     # Connect to the server using streamable HTTP
     # The endpoint should be /mcp since that's where we route MCP requests
-    async with streamablehttp_client("http://localhost:8081/mcp") as streams:
+    async with streamablehttp_client("http://localhost:8080/mcp") as streams:
         read_stream, write_stream = streams[0], streams[1]
         
         async with ClientSession(read_stream, write_stream) as session:
