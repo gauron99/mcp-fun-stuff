@@ -4,7 +4,7 @@
 
 Implementations of MCP and integrating MCP into Knative Functions
 
-- using (python-sdk)[https://github.com/modelcontextprotocol/python-sdk]
+- using [python-sdk](https://github.com/modelcontextprotocol/python-sdk)
 
 ## dir explanations
 - local - basic implementation of MCP server/client (stdio comms)
