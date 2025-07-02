@@ -23,4 +23,4 @@ Implementations of MCP and integrating MCP into Knative Functions
     - run `python main.py` or similar in non-functions dir
     - run `func deploy` or `func run` using host builder
 - port-forward your function
-        - eg: `kubectl port-forward <pod name in cluster> 8080:8080`
+    - eg: `kubectl port-forward <pod name in cluster> 8080:8080`
