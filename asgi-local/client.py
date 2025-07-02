@@ -12,9 +12,9 @@ async def main():
             await s.initialize()
             print("done!")
             print()
-            #tools = await s.list_tools()
-            #print("--- List of tools ---")
-            #print(tools.tools)
+            tools = await s.list_tools()
+            print("--- List of tools ---")
+            print(tools.tools)
 
             hello_tool = await s.call_tool(
                 name="hello_tool",

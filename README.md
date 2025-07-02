@@ -9,6 +9,7 @@ Implementations of MCP and integrating MCP into Knative Functions
 ## dir explanations
 - local - basic implementation of MCP server/client (stdio comms)
 - http - basic impl of MCP server/client (streamable-http comms)
-- asgi - local integration of MCP into Function
+- asgi-local - local integration of MCP into Function
     - python middleware is simply copy&pasted into `middleware.py`
-
+- asgi - integration of MCP into Function
+    - imports actual func python middleware

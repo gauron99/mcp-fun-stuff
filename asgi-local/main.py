@@ -3,7 +3,7 @@ import logging
 
 from mcp.server.fastmcp import FastMCP
 
-from func_python.http import serve
+from middleware import serve
 
 def new():
     """Factory function for creating Function instances."""
