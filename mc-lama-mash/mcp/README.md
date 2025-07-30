@@ -6,7 +6,11 @@ exposes Ollama capabilities through standardized MCP tools, enabling the
 interact with locally hosted language models.
 
 The flow is as follows:
-`MCP client -> MCP Serer (Function) -> Ollama Server`
+`MCP client -> MCP Server (Function) -> Ollama Server`
+
+1) Setup `ollama` server using `ollama serve`
+2) Run your function (MCP server)
+3) Connect using MCP client in `client/` dir (`python client.py`)
 
 ## Architecture
 
@@ -14,8 +18,8 @@ This project implements an ASGI-based Knative function with the following key
 components:
 
 ### Core Components
-- **Function Class**: Main ASGI application entry point with lifecycle
-management
+- **Function Class**: Main ASGI application entry point (This is your base
+Function)
 - **MCPServer Class**: FastMCP-based server implementing HTTP-streamable MCP
 protocol
 - **MCP Tools**: Three primary tools for Ollama interaction:
@@ -23,114 +27,54 @@ protocol
   - `pull_model`: Download and install new models
   - `call_model`: Send prompts to models and receive responses
 
-### Technical Implementation Details
-
-- **Protocol**: HTTP-based MCP communication using FastMCP's streamable HTTP
-transport
-- **Stateless Design**: No persistent state between requests, suitable for
-Kubernetes scaling
-- **Error Handling**: Comprehensive exception handling with user-friendly error
-messages
-- **Lifespan Management**: Proper ASGI lifespan handling for MCP server
-initialization
-
 ## Setup
 
 ### Prerequisites
 
 - Python 3.9 or higher
 - Ollama server running locally or accessible via network
-- (Optional) Knative/Kubernetes environment for deployment
 
 ### Local Development Setup
 
-1. **Install dependencies:**
-   ```bash
-   pip install -e .
-   ```
+1. **Install dependencies & setup env**
+    ```bash
+    pip install -e .
+
+    # optionally setup venv as well
+    ```
 
 2. **Start Ollama server:**
-   ```bash
-   # Install Ollama (if not already installed)
-   curl -fsSL https://ollama.com/install.sh | sh
+    ```bash
+    # Install Ollama (if not already installed)
+    curl -fsSL https://ollama.com/install.sh | sh
 
-   # Start Ollama service
-   ollama serve
+    # Start Ollama service
+    ollama serve
 
-   # Pull a model (optional, can be done via MCP tool)
-   ollama pull llama3.2:3b
-   ```
+    # Pull a model (optional, can be done via MCP tool)
+    ollama pull llama3.2:3b
+    ```
 
-3. **Run the function locally:**
-   ```bash
-   # Using Python directly
-   python -m function.func
+Now you have a running Ollama Server
 
-   # Or using func CLI (if available)
-   func run
-   ```
+3. **Run the function:**
+    ```bash
+    # Using func CLI
+    func run --builder=host
+    ```
 
-4. **Test MCP connectivity:**
-   ```bash
-   python client/client.py
-   ```
+Now you have a running MCP Server
 
-### MCP Tools Reference
+4. **Run MCP client**
+    ```bash
+    # In client/ directory
+    python client.py
+    ```
 
-#### `list_models()`
-- **Purpose**: Returns all models currently available on the Ollama server
-- **Parameters**: None
-- **Returns**: List of model objects with metadata
-- **Usage**: Discover available models before making chat requests
+Now you connect via MCP protocol to the running function, which will call a tool
+`call_model` which will invoke a request from the LLM running on Ollama server.
 
-#### `pull_model(model: str)`
-- **Purpose**: Downloads and installs a model from Ollama's registry
-- **Parameters**:
-  - `model`: Model identifier (e.g., "llama3.2:3b", "codellama:7b")
-- **Returns**: Success/error message
-- **Usage**: Install new models on-demand
-
-#### `call_model(prompt: str, model: str = "llama3.2:3b")`
-- **Purpose**: Sends a prompt to a model and returns the response
-- **Parameters**:
-  - `prompt`: The text prompt to send to the model
-  - `model`: Model identifier (defaults to "llama3.2:3b")
-- **Returns**: Model's text response
-- **Usage**: Primary interface for LLM interactions
-
-### Client Usage Example
-
-```python
-import asyncio
-from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
-
-async def main():
-    async with streamablehttp_client("http://localhost:8080/mcp") as streams:
-        read_stream, write_stream = streams[0], streams[1]
-
-        async with ClientSession(read_stream, write_stream) as session:
-            await session.initialize()
-
-            # List available models
-            models = await session.call_tool(name="list_models")
-            print(f"Available models: {models}")
-
-            # Chat with a model
-            response = await session.call_tool(
-                name="call_model",
-                arguments={
-                    "prompt": "Explain async programming in Python",
-                    "model": "llama3.2:3b"
-                }
-            )
-            print(f"Response: {response.content}")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Deployment
+### Deployment to cluster (not tested)
 
 #### Knative Function Deployment
 
@@ -141,23 +85,6 @@ func deploy
 # Or build and deploy with custom image
 func deploy --image your-registry/mcp-ollama-function
 ```
-
-#### Docker Deployment
-
-```bash
-# Build container
-docker build -t mcp-ollama-function .
-
-# Run container
-docker run -p 8080:8080 \
-  -e OLLAMA_HOST=host.docker.internal:11434 \
-  mcp-ollama-function
-```
-
-### Optional ENVs
-
-- `OLLAMA_HOST`: Ollama server host (default: localhost:11434)
-- `MCP_PATH`: Path for MCP endpoint (default: /mcp)
 
 ### Troubleshooting
 
