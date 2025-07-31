@@ -13,6 +13,8 @@ integrating this mcp
 which exposes ollama inference model as one of it's tools. You can communicate
 with the MCP server (function) via MCP client (this can be further moved into
 having MCP client as another function and you could communicate w/ that function)
+- `rag-tool` simply pulls a raw text via url and uses RAG to "enhance" the answers
+of the model
 
 ## General How to use
 - This might not apply exactly to all the directories
