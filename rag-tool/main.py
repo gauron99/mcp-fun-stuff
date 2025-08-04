@@ -23,11 +23,22 @@ for i, d in enumerate(documents):
             documents=[d]
             )
 
-### 2) Retrieve
-prompt = "What is the Knative Python Function?"
+##### 2) Retrieve
+### embed the prompt and retrieve the most relevant info
+prompt = "How can I run my Function?"
+resp = ollama.embed(model="mxbai-embed-large",input=prompt)
+
+results = collection.query(
+        query_embeddings=resp["embeddings"],
+        n_results=1
+        )
+
+data = results['documents'][0][0]
+
+### Generate
 output = ollama.generate(
         model="llama3.2:3b",
-        prompt=prompt
+        prompt=f"Using this data: {data}, respond to prompt: {prompt}"
         )
 
 print(output['response'])
