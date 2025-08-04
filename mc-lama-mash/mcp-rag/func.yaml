@@ -1,0 +1,9 @@
+# $schema: https://raw.githubusercontent.com/knative/func/release-1.19/schema/func_yaml-schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/knative/func/release-1.19/schema/func_yaml-schema.json
+specVersion: 0.36.0
+name: fnmcp
+runtime: python
+registry: quay.io/dfridric
+created: 2025-07-30T07:39:46.204700061+02:00
+build:
+  builder: host

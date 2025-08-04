@@ -1,6 +1,5 @@
 import requests
 
-
 # Accepts any url link which points to a raw data (*.md/text files etc.)
 # example: https://raw.githubusercontent.com/knative/func/main/docs/function-templates/python.md
 def get_raw_content(url: str) -> str:
